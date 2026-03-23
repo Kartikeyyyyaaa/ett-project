@@ -1,0 +1,29 @@
+# Example overrides for Minikube / local clusters (copy to values-local.yaml).
+frontend:
+  image:
+    repository: YOUR_DOCKERHUB_USER/devops-demo-frontend
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+
+backend:
+  image:
+    repository: YOUR_DOCKERHUB_USER/devops-demo-backend
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+
+postgresql:
+  storage:
+    storageClass: "standard"
+
+ingress:
+  hosts:
+    - host: devops-demo.local
+      paths:
+        - path: /api
+          pathType: Prefix
+          service: backend
+        - path: /
+          pathType: Prefix
+          service: frontend

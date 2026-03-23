@@ -1,0 +1,14 @@
+{{- if .Values.ingress.enabled }}
+Release: {{ .Release.Name }}  Namespace: {{ .Release.Namespace }}
+
+1. Ingress address:
+   kubectl get ingress {{ include "devops-demo.fullname" . }} -n {{ .Release.Namespace }}
+
+2. Add to /etc/hosts (example):
+   <INGRESS_IP> {{ (index .Values.ingress.hosts 0).host }}
+
+3. UI: http://{{ (index .Values.ingress.hosts 0).host }}/
+4. Health: curl -s http://{{ (index .Values.ingress.hosts 0).host }}/api/health
+{{- else }}
+Installed without Ingress — port-forward services as needed.
+{{- end }}

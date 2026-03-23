@@ -1,0 +1,18 @@
+{{- if .Values.backend.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "devops-demo.backend.fullname" . }}
+  labels:
+    {{- include "devops-demo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.service.backend.port }}
+      targetPort: http
+      name: http
+  selector:
+    {{- include "devops-demo.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+{{- end }}

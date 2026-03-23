@@ -1,0 +1,132 @@
+# Default values — override per environment (e.g. values-prod.yaml)
+
+global:
+  imageRegistry: ""
+
+nameOverride: ""
+fullnameOverride: ""
+
+frontend:
+  enabled: true
+  image:
+    repository: YOUR_DOCKERHUB_USER/devops-demo-frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+
+backend:
+  enabled: true
+  image:
+    repository: YOUR_DOCKERHUB_USER/devops-demo-backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+  env:
+    corsOrigin: "*"
+    port: 3000
+
+# Non-sensitive app config (ConfigMap)
+config:
+  dbName: appdb
+  dbUser: appuser
+  dbPort: "5432"
+
+# Sensitive values — set via --set, secrets file, or External Secrets in production
+secrets:
+  # Change in production; consider Sealed Secrets / External Secrets
+  postgresPassword: changeme
+  # If empty, defaults to postgresPassword (dev only)
+  dbPassword: ""
+
+postgresql:
+  enabled: true
+  image:
+    repository: postgres
+    tag: "16-alpine"
+  podSecurityContext:
+    fsGroup: 70
+    runAsUser: 70
+    runAsNonRoot: true
+  storage:
+    size: 5Gi
+    storageClass: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "2m"
+  hosts:
+    - host: devops-demo.local
+      paths:
+        - path: /api
+          pathType: Prefix
+          service: backend
+        - path: /
+          pathType: Prefix
+          service: frontend
+  tls: []
+  # Example TLS with cert-manager:
+  # tls:
+  #   - secretName: devops-demo-tls
+  #     hosts:
+  #       - devops-demo.example.com
+
+service:
+  frontend:
+    port: 80
+  backend:
+    port: 3000
+  postgresql:
+    port: 5432
+
+podSecurityContext:
+  fsGroup: 1000
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Requires Prometheus Operator CRDs (e.g. kube-prometheus-stack)
+monitoring:
+  serviceMonitor:
+    enabled: false
