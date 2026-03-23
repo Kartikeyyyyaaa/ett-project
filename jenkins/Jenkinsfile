@@ -1,0 +1,46 @@
+// Optional Jenkins pipeline mirroring the GitHub Actions flow.
+// Configure credentials: dockerhub-user, dockerhub-token, kubeconfig (Secret file).
+
+pipeline {
+  agent any
+  environment {
+    IMAGE_PREFIX = "${env.DOCKERHUB_USER}/devops-demo"
+    TAG = "${env.GIT_COMMIT ? env.GIT_COMMIT.take(12) : 'manual'}"
+  }
+  stages {
+    stage('Checkout') {
+      steps { checkout scm }
+    }
+    stage('Docker login') {
+      steps {
+        withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DH_USER', passwordVariable: 'DH_PASS')]) {
+          sh 'echo "$DH_PASS" | docker login -u "$DH_USER" --password-stdin'
+        }
+      }
+    }
+    stage('Build & push') {
+      steps {
+        sh '''
+          docker build -t $IMAGE_PREFIX-backend:$TAG app/backend
+          docker push $IMAGE_PREFIX-backend:$TAG
+          docker build -t $IMAGE_PREFIX-frontend:$TAG --build-arg VITE_API_BASE_URL= app/frontend
+          docker push $IMAGE_PREFIX-frontend:$TAG
+        '''
+      }
+    }
+    stage('Helm deploy') {
+      steps {
+        withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+          sh '''
+            helm upgrade --install devops-demo helm/devops-demo \
+              --set frontend.image.repository=$IMAGE_PREFIX-frontend \
+              --set frontend.image.tag=$TAG \
+              --set backend.image.repository=$IMAGE_PREFIX-backend \
+              --set backend.image.tag=$TAG \
+              --wait --timeout 15m
+          '''
+        }
+      }
+    }
+  }
+}
