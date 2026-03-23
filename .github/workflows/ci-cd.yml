@@ -1,0 +1,91 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "helm/**"
+      - ".github/workflows/ci-cd.yml"
+  workflow_dispatch:
+
+env:
+  REGISTRY: docker.io
+  IMAGE_PREFIX: ${{ secrets.DOCKERHUB_USERNAME }}/devops-demo
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set image tag
+        id: meta
+        run: echo "tag=${GITHUB_SHA:0:12}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./app/backend
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-backend:${{ steps.meta.outputs.tag }}
+            ${{ env.IMAGE_PREFIX }}-backend:latest
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./app/frontend
+          push: true
+          build-args: |
+            VITE_API_BASE_URL=
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-frontend:${{ steps.meta.outputs.tag }}
+            ${{ env.IMAGE_PREFIX }}-frontend:latest
+
+  deploy:
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.4
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p "$HOME/.kube"
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+
+      - name: Deploy with Helm
+        env:
+          TAG: ${{ needs.build-and-push.outputs.tag }}
+          NS: ${{ vars.K8S_NAMESPACE || 'default' }}
+          RELEASE: ${{ vars.HELM_RELEASE_NAME || 'devops-demo' }}
+        run: |
+          helm upgrade --install "$RELEASE" ./helm/devops-demo \
+            --namespace "$NS" --create-namespace \
+            --set frontend.image.repository="${{ secrets.DOCKERHUB_USERNAME }}/devops-demo-frontend" \
+            --set frontend.image.tag="$TAG" \
+            --set backend.image.repository="${{ secrets.DOCKERHUB_USERNAME }}/devops-demo-backend" \
+            --set backend.image.tag="$TAG" \
+            --wait --timeout 15m
