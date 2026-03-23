@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: elasticsearch-config
+  namespace: logging
+data:
+  elasticsearch.yml: |
+    cluster.name: devops-demo-logs
+    network.host: 0.0.0.0
+    discovery.type: single-node
+    xpack.security.enabled: false
